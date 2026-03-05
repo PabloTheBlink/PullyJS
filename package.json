@@ -1,0 +1,48 @@
+{
+  "name": "@pablotheblink/pullyjs",
+  "version": "1.0.5",
+  "description": "Una librería moderna de notificaciones para JavaScript - ligera, elegante y fácil de usar",
+  "main": "pully.js",
+  "module": "pully.js",
+  "browser": "pully.js",
+  "types": "pully.d.ts",
+  "files": [
+    "pully.js",
+    "pully.d.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0",
+    "prepublishOnly": "echo \"Preparando para publicar...\"",
+    "build": "echo \"Build completado\""
+  },
+  "keywords": [
+    "notifications",
+    "toast",
+    "alerts",
+    "messages",
+    "ui",
+    "javascript",
+    "pully",
+    "notificaciones",
+    "frontend"
+  ],
+  "author": "Pablo Martínez",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pablotheblink/PullyJS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pablotheblink/PullyJS/issues"
+  },
+  "homepage": "https://github.com/pablotheblink/PullyJS#readme",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}

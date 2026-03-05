@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PullyJS - Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+    }
+    .header {
+      background: #6366f1;
+      color: white;
+      padding: 16px;
+      text-align: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    #scroll-container {
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .item {
+      background: white;
+      padding: 16px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .item:last-child {
+      margin-bottom: 100px;
+    }
+    .status {
+      text-align: center;
+      padding: 12px;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>PullyJS Demo</h1>
+    <p>Scroll down and pull to refresh</p>
+  </div>
+
+  <div id="scroll-container">
+    <div class="status" id="status">Last refreshed: --</div>
+    <div id="items"></div>
+  </div>
+
+  <script src="pully.js"></script>
+  <script>
+    const container = document.getElementById('scroll-container');
+    const statusEl = document.getElementById('status');
+    const itemsEl = document.getElementById('items');
+
+    let count = 5;
+
+    function renderItems() {
+      itemsEl.innerHTML = '';
+      for (let i = 1; i <= count; i++) {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.textContent = `Item ${i}`;
+        itemsEl.appendChild(item);
+      }
+    }
+
+    function updateStatus() {
+      const now = new Date();
+      statusEl.textContent = `Last refreshed: ${now.toLocaleTimeString()}`;
+    }
+
+    // Initialize Pully
+    const pully = new Pully('#scroll-container', {
+      onRefresh: async () => {
+        console.log('Refreshing...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        count += 3;
+        renderItems();
+        updateStatus();
+      },
+      threshold: 100
+    });
+
+    renderItems();
+    updateStatus();
+  </script>
+</body>
+</html>
