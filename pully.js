@@ -131,8 +131,8 @@
     }
     .pully-content {
       transition: transform 0.2s ease;
-      padding-top: 60px;
-      margin-top: -60px;
+      padding-top: 1rem;
+      margin-top: 1rem;
     }
   `;
 
