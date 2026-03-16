@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PullyJS — Pull to Refresh for the Web</title>
+  <meta name="description"
+    content="Lightweight, zero-dependency pull-to-refresh for the web. Works everywhere. Ships in minutes.">
+  <style>
+    :root {
+      --indigo: #6366f1;
+      --violet: #8b5cf6;
+      --pink: #ec4899;
+      --dark: #07070e;
+      --darker: #04040a;
+      --surface: rgba(255, 255, 255, 0.04);
+      --surface-hover: rgba(255, 255, 255, 0.07);
+      --border: rgba(255, 255, 255, 0.07);
+      --border-bright: rgba(99, 102, 241, 0.3);
+      --text: #f1f5f9;
+      --muted: #64748b;
+      --subtle: #334155;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      background: var(--dark);
+      color: var(--text);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* ─── NOISE TEXTURE ─────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.018;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ─── ORBS ──────────────────────────────────────────────── */
+    .bg {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      animation: drift 12s ease-in-out infinite;
+    }
+
+    .orb-1 {
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle at center, rgba(99, 102, 241, 0.22) 0%, transparent 70%);
+      top: -200px;
+      right: -150px;
+      animation-duration: 14s;
+    }
+
+    .orb-2 {
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle at center, rgba(139, 92, 246, 0.18) 0%, transparent 70%);
+      bottom: 5%;
+      left: -120px;
+      animation-duration: 10s;
+      animation-delay: -5s;
+    }
+
+    .orb-3 {
+      width: 350px;
+      height: 350px;
+      background: radial-gradient(circle at center, rgba(236, 72, 153, 0.12) 0%, transparent 70%);
+      top: 45%;
+      left: 45%;
+      animation-duration: 16s;
+      animation-delay: -9s;
+    }
+
+    @keyframes drift {
+
+      0%,
+      100% {
+        transform: translate(0, 0) scale(1);
+      }
+
+      33% {
+        transform: translate(30px, -40px) scale(1.04);
+      }
+
+      66% {
+        transform: translate(-20px, 20px) scale(0.97);
+      }
+    }
+
+    /* ─── LAYOUT ────────────────────────────────────────────── */
+    .wrap {
+      position: relative;
+      z-index: 2;
+    }
+
+    .container {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    /* ─── NAV ────────────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      background: rgba(7, 7, 14, 0.75);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 2rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #a5b4fc, var(--violet));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .nav-logo svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 8px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      background: var(--surface);
+    }
+
+    .nav-btn {
+      background: var(--indigo) !important;
+      color: white !important;
+      font-weight: 600;
+      margin-left: 0.5rem;
+      transition: opacity 0.15s, transform 0.15s !important;
+    }
+
+    .nav-btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px) !important;
+      background: var(--indigo) !important;
+    }
+
+    /* ─── HERO ───────────────────────────────────────────────── */
+    .hero {
+      min-height: 100vh;
+      padding: 7rem 2rem 5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 5rem;
+      max-width: 1160px;
+      margin: 0 auto;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.18);
+      color: #a5b4fc;
+      padding: 0.3rem 0.8rem;
+      border-radius: 100px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 1.75rem;
+      letter-spacing: 0.01em;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--indigo);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--indigo);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.3;
+      }
+    }
+
+    .hero-title {
+      font-size: clamp(2.8rem, 5.5vw, 4.5rem);
+      font-weight: 900;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-title .line2 {
+      background: linear-gradient(135deg, var(--indigo) 0%, var(--violet) 45%, var(--pink) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-desc {
+      font-size: 1.1rem;
+      color: var(--muted);
+      line-height: 1.75;
+      margin-bottom: 2.5rem;
+      max-width: 440px;
+    }
+
+    .hero-desc strong {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .hero-btns {
+      display: flex;
+      gap: 0.875rem;
+      margin-bottom: 3.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      color: white;
+      padding: 0.8rem 1.75rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+      letter-spacing: -0.01em;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.4);
+      color: white;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      padding: 0.8rem 1.5rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: color 0.2s, background 0.2s, transform 0.2s;
+    }
+
+    .btn-ghost:hover {
+      color: var(--text);
+      background: var(--surface);
+      transform: translateY(-2px);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 2.5rem;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .stat-val {
+      font-size: 1.9rem;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      background: linear-gradient(135deg, #c7d2fe, var(--violet));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-lbl {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* ─── HERO PHONE ─────────────────────────────────────────── */
+    .hero-visual {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      display: none;
+    }
+
+    .phone-wrap {
+      position: relative;
+      perspective: 1200px;
+    }
+
+    .phone-glow {
+      position: absolute;
+      inset: -60px;
+      background: radial-gradient(ellipse at 50% 60%, rgba(99, 102, 241, 0.25) 0%, transparent 70%);
+      filter: blur(20px);
+      pointer-events: none;
+    }
+
+    .phone {
+      width: 270px;
+      height: 560px;
+      background: linear-gradient(145deg, #1e1e3a, #0f0f1f);
+      border-radius: 44px;
+      border: 1.5px solid rgba(255, 255, 255, 0.1);
+      box-shadow:
+        0 0 0 1px rgba(99, 102, 241, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 50px 100px -20px rgba(0, 0, 0, 0.8),
+        0 0 80px -20px rgba(99, 102, 241, 0.2);
+      overflow: hidden;
+      position: relative;
+      animation: phoneFloat 8s ease-in-out infinite;
+      transform-style: preserve-3d;
+    }
+
+    @keyframes phoneFloat {
+
+      0%,
+      100% {
+        transform: translateY(0) rotateY(-6deg) rotateX(4deg);
+      }
+
+      50% {
+        transform: translateY(-16px) rotateY(-3deg) rotateX(6deg);
+      }
+    }
+
+    .phone-notch {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90px;
+      height: 26px;
+      background: #0a0a12;
+      border-radius: 20px;
+      z-index: 20;
+    }
+
+    .phone-screen {
+      position: absolute;
+      inset: 0;
+      background: #f0f2ff;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .phone-sb {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      padding: 48px 16px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .phone-sb-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: white;
+    }
+
+    .phone-sb-badge {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+    }
+
+    .phone-body {
+      flex: 1;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .phone-card {
+      background: white;
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.06);
+    }
+
+    .phone-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+
+    .phone-card-text .t1 {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .phone-card-text .t2 {
+      font-size: 9px;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+
+    /* Animated pull strip on hero phone */
+    .phone-pull-strip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(99, 102, 241, 0.1);
+      overflow: hidden;
+      z-index: 15;
+    }
+
+    .phone-pull-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--indigo), var(--violet));
+      width: 0%;
+      animation: pullFill 4s ease-in-out infinite;
+    }
+
+    @keyframes pullFill {
+      0% {
+        width: 0%;
+        opacity: 0;
+      }
+
+      15% {
+        opacity: 1;
+      }
+
+      50% {
+        width: 100%;
+      }
+
+      70% {
+        width: 100%;
+        opacity: 0;
+      }
+
+      100% {
+        width: 0%;
+        opacity: 0;
+      }
+    }
+
+    .phone-grip-demo {
+      position: absolute;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      z-index: 15;
+    }
+
+    .grip-bar {
+      width: 38px;
+      height: 4px;
+      background: rgba(99, 102, 241, 0.5);
+      border-radius: 2px;
+      animation: gripPulse 4s ease-in-out infinite;
+    }
+
+    @keyframes gripPulse {
+
+      0%,
+      100% {
+        background: rgba(99, 102, 241, 0.4);
+        transform: scaleX(1);
+      }
+
+      15%,
+      60% {
+        background: #6366f1;
+        transform: scaleX(1.2);
+      }
+
+      75% {
+        background: rgba(99, 102, 241, 0.4);
+        transform: scaleX(1);
+      }
+    }
+
+    .grip-label {
+      font-size: 7px;
+      color: var(--indigo);
+      font-weight: 700;
+      background: rgba(99, 102, 241, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      animation: labelFade 4s ease-in-out infinite;
+      white-space: nowrap;
+    }
+
+    @keyframes labelFade {
+
+      0%,
+      14% {
+        opacity: 0;
+      }
+
+      20% {
+        opacity: 1;
+        content: "Pull down…";
+      }
+
+      48% {
+        opacity: 1;
+      }
+
+      55% {
+        opacity: 0;
+      }
+
+      100% {
+        opacity: 0;
+      }
+    }
+
+    /* Phone ring pulse */
+    .ring {
+      position: absolute;
+      border-radius: 56px;
+      border: 1px solid rgba(99, 102, 241, 0.15);
+      pointer-events: none;
+    }
+
+    .ring-1 {
+      inset: -16px;
+      animation: ringFade 3.5s ease-in-out infinite;
+    }
+
+    .ring-2 {
+      inset: -34px;
+      border-radius: 70px;
+      animation: ringFade 3.5s ease-in-out 1.2s infinite;
+      opacity: 0.6;
+    }
+
+    @keyframes ringFade {
+
+      0%,
+      100% {
+        opacity: 0.4;
+      }
+
+      50% {
+        opacity: 0.05;
+      }
+    }
+
+    /* ─── SECTION HELPERS ────────────────────────────────────── */
+    .section {
+      padding: 7rem 0;
+    }
+
+    .section-tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--indigo);
+      margin-bottom: 1rem;
+    }
+
+    .section-h {
+      font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.12;
+      margin-bottom: 1rem;
+    }
+
+    .section-sub {
+      color: var(--muted);
+      font-size: 1.05rem;
+      max-width: 520px;
+      line-height: 1.7;
+    }
+
+    /* ─── DEMO SECTION ───────────────────────────────────────── */
+    .demo-section {
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg,
+          transparent 0%,
+          rgba(99, 102, 241, 0.03) 30%,
+          rgba(139, 92, 246, 0.03) 70%,
+          transparent 100%);
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 5rem;
+      align-items: center;
+    }
+
+    .demo-phone {
+      width: 290px;
+      height: 600px;
+      background: linear-gradient(145deg, #1e1e3a, #0f0f1f);
+      border-radius: 46px;
+      border: 1.5px solid rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(99, 102, 241, 0.12),
+        0 40px 80px -10px rgba(0, 0, 0, 0.7),
+        0 0 60px -20px rgba(99, 102, 241, 0.15);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .demo-phone-notch {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90px;
+      height: 26px;
+      background: #0a0a12;
+      border-radius: 20px;
+      z-index: 30;
+    }
+
+    .demo-phone-inner {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .demo-header {
+      background: linear-gradient(135deg, #6366f1, #7c3aed);
+      padding: 50px 18px 16px;
+    }
+
+    .demo-header h3 {
+      color: white;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .demo-header p {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 10px;
+      margin-top: 3px;
+    }
+
+    .demo-scroll {
+      flex: 1;
+      overflow-y: auto;
+      background: #f0f2ff;
+      position: relative;
+    }
+
+    .demo-item {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      background: white;
+      margin: 6px 10px;
+      padding: 12px 13px;
+      border-radius: 14px;
+      box-shadow: 0 2px 6px rgba(99, 102, 241, 0.07);
+      animation: slideIn 0.3s ease backwards;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .demo-emoji {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .demo-item-info .n {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .demo-item-info .s {
+      font-size: 9.5px;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+
+    .demo-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .demo-step {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      width: 34px;
+      height: 34px;
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--indigo);
+      flex-shrink: 0;
+    }
+
+    .step-content .step-t {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+
+    .step-content .step-d {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ─── FEATURES ───────────────────────────────────────────── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+      margin-top: 3.5rem;
+    }
+
+    .feat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 1.75rem;
+      transition: transform 0.25s, border-color 0.25s, background 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feat::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.25s;
+      pointer-events: none;
+    }
+
+    .feat:hover {
+      transform: translateY(-5px);
+      border-color: rgba(99, 102, 241, 0.25);
+      background: var(--surface-hover);
+    }
+
+    .feat:hover::after {
+      opacity: 1;
+    }
+
+    .feat-icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.15);
+      border-radius: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .feat-title {
+      font-size: 1rem;
+      font-weight: 800;
+      margin-bottom: 0.6rem;
+      letter-spacing: -0.01em;
+    }
+
+    .feat-desc {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ─── CODE SECTION ───────────────────────────────────────── */
+    .code-section {
+      background: linear-gradient(135deg,
+          rgba(99, 102, 241, 0.04) 0%,
+          rgba(139, 92, 246, 0.04) 100%);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: start;
+    }
+
+    .api-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 2rem;
+    }
+
+    .api-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      transition: border-color 0.2s;
+    }
+
+    .api-item:hover {
+      border-color: rgba(99, 102, 241, 0.25);
+    }
+
+    .api-sig {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.82rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .api-desc {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .c-kw {
+      color: #c084fc;
+    }
+
+    .c-fn {
+      color: #60a5fa;
+    }
+
+    .c-str {
+      color: #86efac;
+    }
+
+    .c-num {
+      color: #fb923c;
+    }
+
+    .c-prop {
+      color: #fcd34d;
+    }
+
+    .c-var {
+      color: #f87171;
+    }
+
+    .c-cm {
+      color: #475569;
+      font-style: italic;
+    }
+
+    .c-br {
+      color: #94a3b8;
+    }
+
+    .code-window {
+      background: #060611;
+      border: 1px solid rgba(99, 102, 241, 0.18);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.05);
+      position: sticky;
+      top: 80px;
+    }
+
+    .code-titlebar {
+      background: #0d0d1e;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+
+    .dot-r {
+      background: #ff5f57;
+    }
+
+    .dot-y {
+      background: #ffbd2e;
+    }
+
+    .dot-g {
+      background: #28c841;
+    }
+
+    .code-fn {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    pre {
+      padding: 1.5rem;
+      font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.83rem;
+      line-height: 1.8;
+      overflow-x: auto;
+      margin: 0;
+      tab-size: 2;
+    }
+
+    .ln {
+      display: inline-block;
+      width: 2rem;
+      color: #2a2a4a;
+      user-select: none;
+      font-size: 0.75rem;
+    }
+
+    /* ─── INSTALL ────────────────────────────────────────────── */
+    .install-section {
+      text-align: center;
+      padding: 7rem 2rem;
+    }
+
+    .install-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 1rem;
+      background: rgba(10, 10, 20, 0.8);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: 14px;
+      padding: 1.1rem 1.75rem;
+      margin: 2.5rem 0 1rem;
+      font-family: 'SF Mono', monospace;
+      font-size: 1rem;
+      color: #a5b4fc;
+    }
+
+    .install-prompt {
+      color: var(--muted);
+      margin-right: 0.25rem;
+    }
+
+    .copy-btn {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      color: var(--indigo);
+      padding: 0.35rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.15s;
+      font-family: inherit;
+    }
+
+    .copy-btn:hover {
+      background: rgba(99, 102, 241, 0.2);
+      transform: scale(1.03);
+    }
+
+    .copy-btn:active {
+      transform: scale(0.97);
+    }
+
+    .install-alt {
+      display: inline-block;
+      background: rgba(10, 10, 20, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 0.7rem 1.25rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+      color: #64748b;
+    }
+
+    .install-alt .ht {
+      color: #475569;
+    }
+
+    .install-alt .tag {
+      color: #60a5fa;
+    }
+
+    .install-alt .attr {
+      color: #fcd34d;
+    }
+
+    .install-alt .val {
+      color: #86efac;
+    }
+
+    .install-sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 1.5rem;
+    }
+
+    /* ─── FOOTER ─────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1160px;
+      margin: 0 auto;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .footer-logo {
+      font-size: 0.95rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a5b4fc, var(--violet));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    footer p {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    footer a {
+      color: #818cf8;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* ─── SCROLL ANIMATIONS ──────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .reveal.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ─── RESPONSIVE ─────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+        text-align: center;
+        gap: 3rem;
+        padding-top: 5rem;
+      }
+
+      .hero-desc {
+        margin: 0 auto 2.5rem;
+      }
+
+      .hero-btns {
+        justify-content: center;
+      }
+
+      .hero-stats {
+        justify-content: center;
+      }
+
+      .hero-visual {
+        display: none;
+      }
+
+      .demo-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-phone {
+        margin: 0 auto;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .code-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .code-window {
+        position: static;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links a:not(.nav-btn) {
+        display: none;
+      }
+    }
+
+    /* ─── SCROLLBAR ──────────────────────────────────────────── */
+    .demo-scroll::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .demo-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .demo-scroll::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.2);
+      border-radius: 2px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Background -->
+  <div class="bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ── NAV ───────────────────────────────────────────────── -->
+    <nav>
+      <div class="nav-inner">
+        <div class="nav-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+            stroke-linejoin="round" style="-webkit-text-fill-color:initial;color:#a5b4fc">
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <polyline points="7 6 12 11 17 6"></polyline>
+          </svg>
+          PullyJS
+        </div>
+        <div class="nav-links">
+          <a href="#demo">Demo</a>
+          <a href="#features">Features</a>
+          <a href="#api">API</a>
+          <a href="https://github.com/pablotheblink/PullyJS" class="nav-btn" target="_blank">GitHub →</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ── HERO ──────────────────────────────────────────────── -->
+    <div class="container">
+      <div class="hero">
+        <div class="hero-text">
+          <div class="hero-badge">
+            <div class="badge-dot"></div>
+            v1.0.5 &nbsp;·&nbsp; MIT &nbsp;·&nbsp; Zero deps
+          </div>
+          <h1 class="hero-title">
+            Pull to Refresh<br>
+            <span class="line2">done right.</span>
+          </h1>
+          <p class="hero-desc">
+            The <strong>smallest, cleanest</strong> pull-to-refresh for the web.
+            No framework needed. Plug in, configure one callback, ship.
+          </p>
+          <div class="hero-btns">
+            <a href="#demo" class="btn-primary">Live demo</a>
+            <a href="#api" class="btn-ghost">View API →</a>
+          </div>
+          <div class="hero-stats">
+            <div class="stat-item">
+              <span class="stat-val">0</span>
+              <span class="stat-lbl">dependencies</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-val">~3KB</span>
+              <span class="stat-lbl">gzipped</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-val">3</span>
+              <span class="stat-lbl">lines of setup</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-visual">
+          <div class="phone-wrap">
+            <div class="phone-glow"></div>
+            <div class="ring ring-1"></div>
+            <div class="ring ring-2"></div>
+            <div class="phone">
+              <!-- Animated pull bar -->
+              <div class="phone-pull-strip">
+                <div class="phone-pull-fill"></div>
+              </div>
+              <!-- Grip -->
+              <div class="phone-grip-demo">
+                <div class="grip-bar"></div>
+                <div class="grip-label">Pull down to refresh</div>
+              </div>
+              <div class="phone-notch"></div>
+              <div class="phone-screen">
+                <div class="phone-sb">
+                  <span class="phone-sb-title">Activity Feed</span>
+                  <span class="phone-sb-badge">LIVE</span>
+                </div>
+                <div class="phone-body">
+                  <div class="phone-card">
+                    <div class="phone-icon" style="background:#eff6ff">🏋️</div>
+                    <div class="phone-card-text">
+                      <div class="t1">Workout logged</div>
+                      <div class="t2">2 minutes ago</div>
+                    </div>
+                  </div>
+                  <div class="phone-card">
+                    <div class="phone-icon" style="background:#fef9c3">🔥</div>
+                    <div class="phone-card-text">
+                      <div class="t1">7-day streak!</div>
+                      <div class="t2">1 hour ago</div>
+                    </div>
+                  </div>
+                  <div class="phone-card">
+                    <div class="phone-icon" style="background:#f0fdf4">📊</div>
+                    <div class="phone-card-text">
+                      <div class="t1">Weekly report ready</div>
+                      <div class="t2">Yesterday</div>
+                    </div>
+                  </div>
+                  <div class="phone-card">
+                    <div class="phone-icon" style="background:#fdf4ff">🎯</div>
+                    <div class="phone-card-text">
+                      <div class="t1">Goal achieved</div>
+                      <div class="t2">Monday</div>
+                    </div>
+                  </div>
+                  <div class="phone-card">
+                    <div class="phone-icon" style="background:#fff7ed">💪</div>
+                    <div class="phone-card-text">
+                      <div class="t1">New PR: Bench 100kg</div>
+                      <div class="t2">Tuesday</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DEMO ───────────────────────────────────────────────── -->
+    <div class="demo-section" id="demo">
+      <div class="container">
+        <div class="section" style="padding-top:5rem;padding-bottom:5rem;">
+          <div class="reveal">
+            <span class="section-tag">Interactive Demo</span>
+            <h2 class="section-h">Try it yourself.</h2>
+            <p class="section-sub">Grab the handle and pull down. Works with both mouse and touch on any device.</p>
+          </div>
+          <div class="demo-grid" style="margin-top:3.5rem;">
+            <div class="reveal" style="transition-delay:0.1s">
+              <div class="demo-phone">
+                <div class="demo-phone-notch"></div>
+                <div class="demo-phone-inner">
+                  <div class="demo-header">
+                    <h3>Notifications</h3>
+                    <p>Grab the handle &amp; pull down</p>
+                  </div>
+                  <div class="demo-scroll" id="pullyTarget" style="overflow-y:auto;">
+                    <div id="demoList"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="reveal" style="transition-delay:0.2s">
+              <h3 style="font-size:1.6rem;font-weight:900;letter-spacing:-0.03em;margin-bottom:1.25rem;">
+                Silky smooth,<br>zero config.
+              </h3>
+              <p style="color:var(--muted);font-size:0.95rem;line-height:1.75;margin-bottom:2rem;">
+                The indigo progress bar fills as you drag. When it hits 100% and you release, your async callback fires.
+                The spinner waits for your Promise to resolve — then resets automatically.
+              </p>
+              <div class="demo-steps">
+                <div class="demo-step">
+                  <div class="step-num">1</div>
+                  <div class="step-content">
+                    <div class="step-t">Grab the grip</div>
+                    <div class="step-d">The small indigo handle at the very top of the container is your drag target.
+                    </div>
+                  </div>
+                </div>
+                <div class="demo-step">
+                  <div class="step-num">2</div>
+                  <div class="step-content">
+                    <div class="step-t">Pull until full</div>
+                    <div class="step-d">The progress bar fills as you drag. The label flips to "¡Suelta!" when you hit
+                      the threshold.</div>
+                  </div>
+                </div>
+                <div class="demo-step">
+                  <div class="step-num">3</div>
+                  <div class="step-content">
+                    <div class="step-t">Release &amp; reload</div>
+                    <div class="step-d">Drop it. The spinner spins while your <code
+                        style="font-size:0.8em;background:var(--surface);padding:1px 5px;border-radius:4px;">onRefresh</code>
+                      promise resolves.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FEATURES ───────────────────────────────────────────── -->
+    <div class="container" id="features">
+      <div class="section">
+        <div class="reveal">
+          <span class="section-tag">Why PullyJS</span>
+          <h2 class="section-h">Everything you need.<br>Nothing you don't.</h2>
+          <p class="section-sub">A focused library that does one thing and does it perfectly.</p>
+        </div>
+        <div class="features-grid">
+          <div class="feat reveal" style="transition-delay:0.05s">
+            <div class="feat-icon">⚡</div>
+            <div class="feat-title">Zero dependencies</div>
+            <div class="feat-desc">Pure vanilla JavaScript. No React, Vue, or build step. One file that works on any
+              page.</div>
+          </div>
+          <div class="feat reveal" style="transition-delay:0.1s">
+            <div class="feat-icon">🎨</div>
+            <div class="feat-title">Auto-styled UI</div>
+            <div class="feat-desc">Progress bar, grip handle, and spinner are injected automatically. Looks great out of
+              the box.</div>
+          </div>
+          <div class="feat reveal" style="transition-delay:0.15s">
+            <div class="feat-icon">📱</div>
+            <div class="feat-title">Touch &amp; mouse</div>
+            <div class="feat-desc">Native touch events for mobile and mouse drag for desktop — both work seamlessly.
+            </div>
+          </div>
+          <div class="feat reveal" style="transition-delay:0.2s">
+            <div class="feat-icon">⏳</div>
+            <div class="feat-title">Async / Promise</div>
+            <div class="feat-desc">Pass an async function. PullyJS shows the spinner until your Promise resolves or
+              rejects.</div>
+          </div>
+          <div class="feat reveal" style="transition-delay:0.25s">
+            <div class="feat-icon">🔌</div>
+            <div class="feat-title">Universal module</div>
+            <div class="feat-desc">Ships as UMD. Use it with a &lt;script&gt; tag, <code
+                style="font-size:0.85em">require()</code>, or <code style="font-size:0.85em">import</code>.</div>
+          </div>
+          <div class="feat reveal" style="transition-delay:0.3s">
+            <div class="feat-icon">🗑️</div>
+            <div class="feat-title">Clean destroy()</div>
+            <div class="feat-desc">One method removes every event listener and DOM node. No memory leaks. Ever.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CODE / API ──────────────────────────────────────────── -->
+    <div class="code-section" id="api">
+      <div class="container">
+        <div class="section">
+          <div class="code-grid">
+            <div>
+              <div class="reveal">
+                <span class="section-tag">API Reference</span>
+                <h2 class="section-h">Dead simple API.</h2>
+                <p class="section-sub">One constructor. Three options. One method to clean up.</p>
+              </div>
+              <div class="api-list reveal" style="transition-delay:0.1s">
+                <div class="api-item">
+                  <div class="api-sig">
+                    <span class="c-kw">new</span>
+                    <span class="c-fn"> Pully</span><span class="c-br">(</span><span class="c-var">container</span><span
+                      class="c-br">, </span><span class="c-var">options</span><span class="c-br">)</span>
+                  </div>
+                  <div class="api-desc">Attach pull-to-refresh to any element. <code>container</code> is a CSS selector
+                    or HTMLElement.</div>
+                </div>
+                <div class="api-item">
+                  <div class="api-sig">
+                    <span class="c-prop">onRefresh</span><span class="c-br">: </span><span
+                      class="c-kw">async</span><span class="c-br"> () => </span><span class="c-kw">void</span>
+                  </div>
+                  <div class="api-desc">Called after the user releases past the threshold. Awaited before spinner
+                    resets.</div>
+                </div>
+                <div class="api-item">
+                  <div class="api-sig">
+                    <span class="c-prop">onRelease</span><span class="c-br">: () => </span><span
+                      class="c-kw">void</span>
+                  </div>
+                  <div class="api-desc">Fires immediately on release, before the async refresh starts.</div>
+                </div>
+                <div class="api-item">
+                  <div class="api-sig">
+                    <span class="c-prop">threshold</span><span class="c-br">: </span><span class="c-num">100</span>
+                  </div>
+                  <div class="api-desc">Pixels the user must drag before a release triggers refresh. Default: 100.</div>
+                </div>
+                <div class="api-item">
+                  <div class="api-sig">
+                    <span class="c-var">instance</span><span class="c-br">.</span><span class="c-fn">destroy</span><span
+                      class="c-br">()</span>
+                  </div>
+                  <div class="api-desc">Removes all event listeners and injected DOM elements. Good for SPA cleanup.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="reveal" style="transition-delay:0.15s">
+              <div class="code-window">
+                <div class="code-titlebar">
+                  <div class="dot dot-r"></div>
+                  <div class="dot dot-y"></div>
+                  <div class="dot dot-g"></div>
+                  <span class="code-fn">app.js</span>
+                </div>
+                <pre><span class="ln"> 1</span><span class="c-cm">// ① Import (or use a &lt;script&gt; tag)</span>
+<span class="ln"> 2</span><span class="c-kw">import</span> Pully <span class="c-kw">from</span> <span class="c-str">'pullyjs'</span><span class="c-br">;</span>
+<span class="ln"> 3</span>
+<span class="ln"> 4</span><span class="c-cm">// ② Initialize</span>
+<span class="ln"> 5</span><span class="c-kw">const</span> <span class="c-var">pully</span> <span class="c-br">= </span><span class="c-kw">new</span> <span class="c-fn">Pully</span><span class="c-br">(</span><span class="c-str">'#feed'</span><span class="c-br">, {</span>
+<span class="ln"> 6</span>  <span class="c-cm">// required: your refresh logic</span>
+<span class="ln"> 7</span>  <span class="c-prop">onRefresh</span><span class="c-br">: </span><span class="c-kw">async</span> <span class="c-br">() => {</span>
+<span class="ln"> 8</span>    <span class="c-kw">const</span> <span class="c-var">posts</span> <span class="c-br">= </span><span class="c-kw">await</span> <span class="c-fn">fetchLatest</span><span class="c-br">();</span>
+<span class="ln"> 9</span>    <span class="c-fn">renderFeed</span><span class="c-br">(</span><span class="c-var">posts</span><span class="c-br">);</span>
+<span class="ln">10</span>  <span class="c-br">},</span>
+<span class="ln">11</span>
+<span class="ln">12</span>  <span class="c-cm">// optional: fires on release, before refresh</span>
+<span class="ln">13</span>  <span class="c-prop">onRelease</span><span class="c-br">: () => </span><span class="c-fn">analytics</span><span class="c-br">.</span><span class="c-fn">track</span><span class="c-br">(</span><span class="c-str">'pull'</span><span class="c-br">),</span>
+<span class="ln">14</span>
+<span class="ln">15</span>  <span class="c-cm">// optional: pixels to drag (default: 100)</span>
+<span class="ln">16</span>  <span class="c-prop">threshold</span><span class="c-br">: </span><span class="c-num">80</span><span class="c-br">,</span>
+<span class="ln">17</span><span class="c-br">});</span>
+<span class="ln">18</span>
+<span class="ln">19</span><span class="c-cm">// ③ Clean up (e.g. SPA route change)</span>
+<span class="ln">20</span><span class="c-var">pully</span><span class="c-br">.</span><span class="c-fn">destroy</span><span class="c-br">();</span></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── INSTALL ────────────────────────────────────────────── -->
+    <div class="install-section reveal">
+      <span class="section-tag">Get started</span>
+      <h2 class="section-h" style="margin-bottom:0.5rem;">Ship in 5 minutes.</h2>
+      <p style="color:var(--muted);">One command. One constructor. One callback.</p>
+      <div>
+        <div class="install-pill">
+          <span class="install-prompt">$</span>
+          <span>npm install pullyjs</span>
+          <button class="copy-btn" onclick="copyNpm(this)">Copy</button>
+        </div>
+      </div>
+      <p style="color:var(--muted);font-size:0.85rem;margin-bottom:0.75rem;">Or drop the script tag — no build step
+        needed:</p>
+      <div class="install-alt">
+        <span class="ht">&lt;</span><span class="tag">script</span>
+        <span class="attr"> src</span><span class="ht">=</span><span class="val">"pully.js"</span><span
+          class="ht">&gt;&lt;/</span><span class="tag">script</span><span class="ht">&gt;</span>
+      </div>
+      <p class="install-sub" style="margin-top:2.5rem;">
+        <a href="https://github.com/pablotheblink/PullyJS" target="_blank" class="btn-primary"
+          style="display:inline-block;text-decoration:none;margin-right:1rem;">View on GitHub →</a>
+        <a href="test.html" style="color:var(--muted);font-size:0.9rem;">See the test page</a>
+      </p>
+    </div>
+
+    <!-- ── FOOTER ─────────────────────────────────────────────── -->
+    <footer>
+      <div class="footer-inner">
+        <span class="footer-logo">⚡ PullyJS</span>
+        <p>Built by <a href="https://github.com/pablotheblink" target="_blank">Pablo Martínez</a> · MIT License</p>
+        <p>
+          <a href="https://github.com/pablotheblink/PullyJS" target="_blank">GitHub</a>
+          &nbsp;·&nbsp;
+          <a href="https://www.npmjs.com/package/pullyjs" target="_blank">npm</a>
+        </p>
+      </div>
+    </footer>
+
+  </div><!-- /wrap -->
+
+  <script src="pully.js"></script>
+  <script>
+    /* ── Demo data ── */
+    const items = [
+      { emoji: '📬', bg: '#eff6ff', name: 'New message from Alex', time: 'Just now' },
+      { emoji: '🔔', bg: '#f0fdf4', name: 'Your order has shipped', time: '3 min ago' },
+      { emoji: '❤️', bg: '#fdf2f8', name: 'Maria liked your post', time: '11 min ago' },
+      { emoji: '🎉', bg: '#fffbeb', name: 'You earned a new badge', time: '1 hour ago' },
+      { emoji: '💬', bg: '#f5f3ff', name: 'New comment on your photo', time: '2 hours ago' },
+      { emoji: '⭐', bg: '#fff7ed', name: 'Weekly digest is ready', time: 'Yesterday' },
+    ];
+
+    function render() {
+      document.getElementById('demoList').innerHTML = items.map((it, i) => `
+      <div class="demo-item" style="animation-delay:${i * 0.04}s">
+        <div class="demo-emoji" style="background:${it.bg}">${it.emoji}</div>
+        <div class="demo-item-info">
+          <div class="n">${it.name}</div>
+          <div class="s">${it.time}</div>
+        </div>
+      </div>
+    `).join('');
+    }
+
+    render();
+
+    /* ── Init PullyJS ── */
+    const pully = new Pully('#pullyTarget', {
+      threshold: 80,
+      onRefresh: async () => {
+        await new Promise(r => setTimeout(r, 1200));
+        const first = items.shift();
+        items.push({ ...first, time: 'Just now' });
+        render();
+      },
+    });
+
+    /* ── Scroll reveal ── */
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('show'); });
+    }, { threshold: 0.08 });
+
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+    /* ── Copy npm ── */
+    function copyNpm(btn) {
+      navigator.clipboard.writeText('npm install pullyjs').then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.background = 'rgba(99,102,241,0.25)';
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.style.background = '';
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+
+</html>
